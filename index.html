@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hourly Volume Aggregator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h2>Upload CSV Files</h2>
+  <input type="file" id="file1" accept=".csv" />
+  <input type="file" id="file2" accept=".csv" />
+  <br /><br />
+  <label for="projected">Projected Total Volume:</label>
+  <input type="number" id="projected" />
+  <button onclick="processFiles()">Process</button>
+  <br /><br />
+  <label><input type="checkbox" id="toggleOP" checked onchange="updateChartVisibility()"> Show OP</label>
+  <label><input type="checkbox" id="toggleBB" checked onchange="updateChartVisibility()"> Show BB</label>
+  <br /><br />
+  <a id="downloadLink" style="display:none" download="aggregated_output.csv">Download CSV</a>
+
+  <h3>Volume Per Hour</h3>
+  <canvas id="volumeChart" width="800" height="300"></canvas>
+  
+  <h3>Cumulative Running Total</h3>
+  <canvas id="cumulativeChart" width="800" height="300"></canvas>
+
+  <div id="dataTableContainer"></div>
+
+  <script>
+    function readCSV(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => {
+          const lines = event.target.result.split("\n").filter(line => line.trim());
+          const rows = [];
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const match = line.match(/^"?(.*?)"?,\s*"?([\d,.\s]+)"?$/);
+            if (!match) continue;
+
+            const timestamp = match[1].trim();
+            const totalStr = match[2].replace(/,/g, "").trim();
+            const total = parseFloat(totalStr);
+            if (!isNaN(total)) {
+              rows.push({ timestamp, total });
+            }
+          }
+
+          resolve(rows);
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsText(file);
+      });
+    }
+
+    function getHour(timestamp) {
+      const match = timestamp.match(/(\d{1,2}):(\d{2})/);
+      if (!match) return "Invalid";
+      const hour = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      if (minutes === 0 || minutes === 30) {
+        return `${String(hour).padStart(2, '0')}:00`;
+      }
+      return "Invalid";
+    }
+
+    function aggregateToHourly(data) {
+      const hourly = {};
+      for (const row of data) {
+        const hour = getHour(row.timestamp);
+        if (!hour || hour === "Invalid") continue;
+        if (!hourly[hour]) hourly[hour] = 0;
+        hourly[hour] += row.total;
+      }
+      return hourly;
+    }
+
+    function mergeAndBuildCSV(opData, bbData, projected) {
+      const allHours = new Set([...Object.keys(opData), ...Object.keys(bbData)]);
+      const sortedHours = [...allHours].sort();
+      let csv = "Timestamp,OP Total,BB Total,Running Total,% of Projected Volume Met\n";
+      const merged = [];
+      let runningTotal = 0;
+
+      for (const hour of sortedHours) {
+        const op = opData[hour] || 0;
+        const bb = bbData[hour] || 0;
+        const sum = op + bb;
+        runningTotal += sum;
+        const percent = projected ? ((runningTotal / projected) * 100).toFixed(2) + "%" : "";
+        csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${percent}\n`;
+        merged.push({ hour, op, bb, runningTotal, percent });
+      }
+
+      return { csv, merged };
+    }
+
+    let stackedChartInstance, cumulativeChartInstance;
+
+    function displayChart(data) {
+      const labels = data.map(row => row.hour);
+      const opTotals = data.map(row => row.op);
+      const bbTotals = data.map(row => row.bb);
+      const runningTotals = data.map(row => row.runningTotal);
+
+      // Destroy previous charts
+      if (stackedChartInstance) stackedChartInstance.destroy();
+      if (cumulativeChartInstance) cumulativeChartInstance.destroy();
+
+      const ctx1 = document.getElementById("volumeChart").getContext("2d");
+      stackedChartInstance = new Chart(ctx1, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "OP",
+              data: opTotals,
+              backgroundColor: "rgba(54, 162, 235, 0.5)"
+            },
+            {
+              label: "BB",
+              data: bbTotals,
+              backgroundColor: "rgba(255, 99, 132, 0.5)"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true, beginAtZero: true }
+          }
+        }
+      });
+
+      const ctx2 = document.getElementById("cumulativeChart").getContext("2d");
+      cumulativeChartInstance = new Chart(ctx2, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Running Total",
+            data: runningTotals,
+            fill: false,
+            borderColor: "green",
+            tension: 0.1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    function updateChartVisibility() {
+      const showOP = document.getElementById("toggleOP").checked;
+      const showBB = document.getElementById("toggleBB").checked;
+
+      stackedChartInstance.data.datasets[0].hidden = !showOP;
+      stackedChartInstance.data.datasets[1].hidden = !showBB;
+      stackedChartInstance.update();
+    }
+
+    function displayTable(data) {
+      const container = document.getElementById("dataTableContainer");
+      container.innerHTML = "";
+      const table = document.createElement("table");
+      table.border = "1";
+      const header = table.insertRow();
+      ["Hour", "OP Total", "BB Total", "Running Total", "% Projected Volume"].forEach(text =>
+        header.insertCell().textContent = text
+      );
+      for (const row of data) {
+        const tr = table.insertRow();
+        tr.insertCell().textContent = row.hour;
+        tr.insertCell().textContent = row.op.toFixed(2);
+        tr.insertCell().textContent = row.bb.toFixed(2);
+        tr.insertCell().textContent = row.runningTotal.toFixed(2);
+        tr.insertCell().textContent = row.percent;
+      }
+      container.appendChild(table);
+    }
+
+    async function processFiles() {
+      const file1 = document.getElementById("file1").files[0];
+      const file2 = document.getElementById("file2").files[0];
+      const projected = parseFloat(document.getElementById("projected").value) || 0;
+
+      if (!file1 || !file2) {
+        alert("Please select both files.");
+        return;
+      }
+
+      const file1Data = await readCSV(file1);
+      const file2Data = await readCSV(file2);
+
+      const name1 = file1.name.includes("FLX.0191") ? "OP" : (file1.name.includes("FLX.0192") ? "BB" : "Sheet1");
+      const name2 = file2.name.includes("FLX.0192") ? "BB" : (file2.name.includes("FLX.0191") ? "OP" : "Sheet2");
+
+      const sheet1Data = name1 === "OP" ? file1Data : file2Data;
+      const sheet2Data = name1 === "OP" ? file2Data : file1Data;
+
+      const sheet1Hourly = aggregateToHourly(sheet1Data);
+      const sheet2Hourly = aggregateToHourly(sheet2Data);
+
+      const { csv, merged } = mergeAndBuildCSV(sheet1Hourly, sheet2Hourly, projected);
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.getElementById("downloadLink");
+      link.href = URL.createObjectURL(blob);
+      link.style.display = "inline";
+
+      displayChart(merged);
+      displayTable(merged);
+    }
+  </script>
+</body>
+</html>
