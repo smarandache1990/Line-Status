@@ -90,7 +90,7 @@
         const sum = op + bb;
         runningTotal += sum;
         const percent = projected ? ((runningTotal / projected) * 100).toFixed(2) + "%" : "";
-        merged.push({ hour, op, bb, runningTotal, percent });
+        merged.push({ hour, op, bb, total: sum, runningTotal, percent });
         csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${percent}\n`;
       }
 
@@ -105,8 +105,8 @@
       const bbTotals = data.map(row => row.bb);
       const runningTotals = data.map(row => row.runningTotal);
 
-      if (stackedChartInstance) stackedChartInstance.destroy();
-      if (cumulativeChartInstance) cumulativeChartInstance.destroy();
+      if (stackedChartInstance?.destroy) stackedChartInstance.destroy();
+      if (cumulativeChartInstance?.destroy) cumulativeChartInstance.destroy();
 
       const ctx1 = document.getElementById("volumeChart").getContext("2d");
       stackedChartInstance = new Chart(ctx1, {
@@ -202,12 +202,12 @@
       const table = document.createElement("table");
       table.border = "1";
       const header = table.insertRow();
-      ["Hour Range", "OP Total", "BB Total", "Running Total", "% Projected Volume"].forEach(text =>
+      ["Hour Range", "OP Total", "BB Total", "Combined Total", "Running Total", "% Projected Volume"].forEach(text =>
         header.insertCell().textContent = text
       );
       for (const row of data) {
         const tr = table.insertRow();
-        const [hourStr, minuteStr] = row.hour.split(":");
+        const [hourStr] = row.hour.split(":");
         const startHour = parseInt(hourStr, 10);
         const endHour = (startHour + 1) % 24;
         const range = `${row.hour}-${String(endHour).padStart(2, '0')}:00`;
@@ -222,6 +222,7 @@
         bbCell.textContent = row.bb.toFixed(2);
         bbCell.style.backgroundColor = "rgba(255, 255, 0, 0.2)";
 
+        tr.insertCell().textContent = (row.op + row.bb).toFixed(2);
         tr.insertCell().textContent = row.runningTotal.toFixed(2);
         tr.insertCell().textContent = row.percent;
       }
