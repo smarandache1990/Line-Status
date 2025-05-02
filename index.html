@@ -80,7 +80,7 @@
     function mergeAndBuildCSV(opData, bbData, projected) {
       const allHours = new Set([...Object.keys(opData), ...Object.keys(bbData)]);
       const sortedHours = [...allHours].sort();
-      let csv = "Timestamp,OP Total,BB Total,Running Total,% of Projected Volume Met\n";
+      let csv = "Timestamp,OP Total,BB Total,Running Total,Remaining, % of Projected Volume Met\n";
       const merged = [];
       let runningTotal = 0;
 
@@ -89,9 +89,10 @@
         const bb = bbData[hour] || 0;
         const sum = op + bb;
         runningTotal += sum;
+        const remaining = projected ? projected - runningTotal : 0;
         const percent = projected ? ((runningTotal / projected) * 100).toFixed(2) + "%" : "";
-        merged.push({ hour, op, bb, total: sum, runningTotal, percent });
-        csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${percent}\n`;
+        merged.push({ hour, op, bb, total: sum, runningTotal, remaining, percent });
+        csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${remaining.toFixed(2)},${percent}\n`;
       }
 
       return { csv, merged };
@@ -202,9 +203,10 @@
       const table = document.createElement("table");
       table.border = "1";
       const header = table.insertRow();
-      ["Hour Range", "OP Total", "BB Total", "Combined Total", "Running Total", "% Projected Volume"].forEach(text =>
+      ["Hour Range", "OP Total", "BB Total", "Combined Total", "Running Total", "Remaining", "% Projected Volume"].forEach(text =>
         header.insertCell().textContent = text
       );
+      const projected = parseFloat(document.getElementById("projected").value) || 0;
       for (const row of data) {
         const tr = table.insertRow();
         const [hourStr] = row.hour.split(":");
@@ -224,6 +226,7 @@
 
         tr.insertCell().textContent = (row.op + row.bb).toFixed(2);
         tr.insertCell().textContent = row.runningTotal.toFixed(2);
+        tr.insertCell().textContent = (projected - row.runningTotal).toFixed(2);
         tr.insertCell().textContent = row.percent;
       }
       container.appendChild(table);
