@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Hourly Volume Aggregator</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
   <h2>Upload CSV Files</h2>
@@ -17,7 +18,7 @@
   <label><input type="checkbox" id="toggleOP" checked onchange="updateChartVisibility()"> Show OP</label>
   <label><input type="checkbox" id="toggleBB" checked onchange="updateChartVisibility()"> Show BB</label>
   <br /><br />
-  <a id="downloadLink" style="display:none" download="aggregated_output.csv">Download CSV</a>
+  <button id="downloadExcel" style="display:none" onclick="downloadExcel()">Download Excel</button>
 
   <h3>Volume Per Hour</h3>
   <canvas id="volumeChart" width="800" height="300"></canvas>
@@ -80,7 +81,6 @@
     function mergeAndBuildCSV(opData, bbData, projected) {
       const allHours = new Set([...Object.keys(opData), ...Object.keys(bbData)]);
       const sortedHours = [...allHours].sort();
-      let csv = "Timestamp,OP Total,BB Total,Running Total,Remaining, % of Projected Volume Met\n";
       const merged = [];
       let runningTotal = 0;
 
@@ -89,16 +89,15 @@
         const bb = bbData[hour] || 0;
         const sum = op + bb;
         runningTotal += sum;
-        const remaining = projected ? projected - runningTotal : 0;
         const percent = projected ? ((runningTotal / projected) * 100).toFixed(2) + "%" : "";
+        const remaining = projected ? (projected - runningTotal).toFixed(2) : "";
         merged.push({ hour, op, bb, total: sum, runningTotal, remaining, percent });
-        csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${remaining.toFixed(2)},${percent}\n`;
       }
 
-      return { csv, merged };
+      return { merged };
     }
 
-    let stackedChartInstance, cumulativeChartInstance;
+    let stackedChartInstance, cumulativeChartInstance, globalMergedData = [], globalProjected = 0;
 
     function displayChart(data) {
       const labels = data.map(row => row.hour);
@@ -206,7 +205,6 @@
       ["Hour Range", "OP Total", "BB Total", "Combined Total", "Running Total", "Remaining", "% Projected Volume"].forEach(text =>
         header.insertCell().textContent = text
       );
-      const projected = parseFloat(document.getElementById("projected").value) || 0;
       for (const row of data) {
         const tr = table.insertRow();
         const [hourStr] = row.hour.split(":");
@@ -215,18 +213,11 @@
         const range = `${row.hour}-${String(endHour).padStart(2, '0')}:00`;
 
         tr.insertCell().textContent = range;
-
-        const opCell = tr.insertCell();
-        opCell.textContent = row.op.toFixed(2);
-        opCell.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
-
-        const bbCell = tr.insertCell();
-        bbCell.textContent = row.bb.toFixed(2);
-        bbCell.style.backgroundColor = "rgba(255, 255, 0, 0.2)";
-
+        tr.insertCell().textContent = row.op.toFixed(2);
+        tr.insertCell().textContent = row.bb.toFixed(2);
         tr.insertCell().textContent = (row.op + row.bb).toFixed(2);
         tr.insertCell().textContent = row.runningTotal.toFixed(2);
-        tr.insertCell().textContent = (projected - row.runningTotal).toFixed(2);
+        tr.insertCell().textContent = row.remaining;
         tr.insertCell().textContent = row.percent;
       }
       container.appendChild(table);
@@ -254,15 +245,37 @@
       const sheet1Hourly = aggregateToHourly(sheet1Data);
       const sheet2Hourly = aggregateToHourly(sheet2Data);
 
-      const { csv, merged } = mergeAndBuildCSV(sheet1Hourly, sheet2Hourly, projected);
-
-      const blob = new Blob([csv], { type: "text/csv" });
-      const link = document.getElementById("downloadLink");
-      link.href = URL.createObjectURL(blob);
-      link.style.display = "inline";
+      const { merged } = mergeAndBuildCSV(sheet1Hourly, sheet2Hourly, projected);
 
       displayChart(merged);
       displayTable(merged);
+      globalMergedData = merged;
+      globalProjected = projected;
+      document.getElementById("downloadExcel").style.display = "inline";
+    }
+
+    async function downloadExcel() {
+      const wb = XLSX.utils.book_new();
+      const ws_data = [["Hour", "OP Total", "BB Total", "Combined Total", "Running Total", "Remaining", "% Projected"]];
+      globalMergedData.forEach(row => {
+        ws_data.push([
+          row.hour,
+          row.op,
+          row.bb,
+          row.total,
+          row.runningTotal,
+          row.remaining,
+          row.percent
+        ]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+      // Add canvas images
+      const volumeImage = document.getElementById("volumeChart").toDataURL("image/png");
+      const cumImage = document.getElementById("cumulativeChart").toDataURL("image/png");
+
+      XLSX.utils.book_append_sheet(wb, ws, "Report");
+      XLSX.writeFile(wb, `${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
     }
   </script>
 </body>
