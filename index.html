@@ -37,11 +37,11 @@
 
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i];
-            const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // Split by comma not inside quotes
-            if (parts.length !== 2) continue;
+            const parts = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); // handles commas inside quotes
+            if (parts.length < 2) continue;
 
             const timestamp = parts[0].replace(/^"|"$/g, '').trim();
-            const totalStr = parts[1].replace(/,/g, '').replace(/^"|"$/g, '').trim();
+            const totalStr = parts[1].replace(/,/g, "").replace(/^"|"$/g, '').trim();
             const total = parseFloat(totalStr);
             if (!isNaN(total)) {
               rows.push({ timestamp, total });
@@ -83,15 +83,21 @@
       let csv = "Timestamp,OP Total,BB Total,Running Total,% of Projected Volume Met\n";
       const merged = [];
       let runningTotal = 0;
+      let opRunning = 0;
+      let bbRunning = 0;
 
       for (const hour of sortedHours) {
         const op = opData[hour] || 0;
         const bb = bbData[hour] || 0;
         const sum = op + bb;
+
+        opRunning += op;
+        bbRunning += bb;
         runningTotal += sum;
+
         const percent = projected ? ((runningTotal / projected) * 100).toFixed(2) + "%" : "";
         csv += `${hour},${op.toFixed(2)},${bb.toFixed(2)},${runningTotal.toFixed(2)},${percent}\n`;
-        merged.push({ hour, op, bb, runningTotal, percent });
+        merged.push({ hour, op, bb, runningTotal, opRunning, bbRunning, percent });
       }
 
       return { csv, merged };
@@ -103,7 +109,8 @@
       const labels = data.map(row => row.hour);
       const opTotals = data.map(row => row.op);
       const bbTotals = data.map(row => row.bb);
-      const runningTotals = data.map(row => row.runningTotal);
+      const opRunning = data.map(row => row.opRunning);
+      const bbRunning = data.map(row => row.bbRunning);
 
       if (stackedChartInstance) stackedChartInstance.destroy();
       if (cumulativeChartInstance) cumulativeChartInstance.destroy();
@@ -117,12 +124,12 @@
             {
               label: "OP",
               data: opTotals,
-              backgroundColor: "rgba(54, 162, 235, 0.5)"
+              backgroundColor: "rgba(255, 99, 132, 0.5)"
             },
             {
               label: "BB",
               data: bbTotals,
-              backgroundColor: "rgba(255, 99, 132, 0.5)"
+              backgroundColor: "rgba(222, 130, 50, 0.5)"
             }
           ]
         },
@@ -140,13 +147,24 @@
         type: "line",
         data: {
           labels,
-          datasets: [{
-            label: "Running Total",
-            data: runningTotals,
-            fill: false,
-            borderColor: "green",
-            tension: 0.1
-          }]
+          datasets: [
+            {
+              label: "OP Running Total",
+              data: opRunning,
+              borderColor: "rgba(255, 99, 132, 1)",
+              backgroundColor: "rgba(255, 99, 132, 0.2)",
+              fill: false,
+              tension: 0.1
+            },
+            {
+              label: "BB Running Total",
+              data: bbRunning,
+              borderColor: "rgba(222, 130, 50, 1)",
+              backgroundColor: "rgba(222, 130, 50, 0.2)",
+              fill: false,
+              tension: 0.1
+            }
+          ]
         },
         options: {
           responsive: true,
@@ -172,14 +190,28 @@
       const table = document.createElement("table");
       table.border = "1";
       const header = table.insertRow();
-      ["Hour", "OP Total", "BB Total", "Running Total", "% Projected Volume"].forEach(text =>
+      ["Hour Range", "OP Total", "BB Total", "Running Total", "% Projected Volume"].forEach(text =>
         header.insertCell().textContent = text
       );
       for (const row of data) {
         const tr = table.insertRow();
-        tr.insertCell().textContent = row.hour;
-        tr.insertCell().textContent = row.op.toFixed(2);
-        tr.insertCell().textContent = row.bb.toFixed(2);
+
+        // Convert "09:00" to "09:00-10:00"
+        const [hourStr, minuteStr] = row.hour.split(":");
+        const startHour = parseInt(hourStr, 10);
+        const endHour = (startHour + 1) % 24;
+        const range = `${row.hour}-${String(endHour).padStart(2, '0')}:00`;
+
+        tr.insertCell().textContent = range;
+
+        const opCell = tr.insertCell();
+        opCell.textContent = row.op.toFixed(2);
+        opCell.style.backgroundColor = "rgba(255, 0, 0, 0.2)";
+
+        const bbCell = tr.insertCell();
+        bbCell.textContent = row.bb.toFixed(2);
+        bbCell.style.backgroundColor = "rgba(255, 255, 0, 0.3)";
+
         tr.insertCell().textContent = row.runningTotal.toFixed(2);
         tr.insertCell().textContent = row.percent;
       }
