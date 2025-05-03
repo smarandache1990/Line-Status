@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>Hourly Volume Aggregator</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
   <h2>Upload CSV Files</h2>
   <input type="file" id="file1" accept=".csv" />
@@ -105,8 +107,8 @@
       const bbTotals = data.map(row => row.bb);
       const runningTotals = data.map(row => row.runningTotal);
 
-      if (stackedChartInstance?.destroy) stackedChartInstance.destroy();
-      if (cumulativeChartInstance?.destroy) cumulativeChartInstance.destroy();
+      if (stackedChartInstance) stackedChartInstance.destroy();
+      if (cumulativeChartInstance) cumulativeChartInstance.destroy();
 
       const ctx1 = document.getElementById("volumeChart").getContext("2d");
       stackedChartInstance = new Chart(ctx1, {
@@ -269,14 +271,10 @@
         ]);
       });
       const ws = XLSX.utils.aoa_to_sheet(ws_data);
-
-      // Add canvas images
-      const volumeImage = document.getElementById("volumeChart").toDataURL("image/png");
-      const cumImage = document.getElementById("cumulativeChart").toDataURL("image/png");
-
       XLSX.utils.book_append_sheet(wb, ws, "Report");
       XLSX.writeFile(wb, `${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`);
     }
   </script>
 </body>
+
 </html>
