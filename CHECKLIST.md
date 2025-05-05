@@ -16,7 +16,7 @@
 - [x] Saved connection string to `.env` file
 
 ## ⚙️ Node.js Backend
-- [ ] Connected Node.js app to Neon PostgreSQL database
+- [x] Connected Node.js app to Neon PostgreSQL database
 - [ ] Created queries to insert, retrieve, and process data
 - [ ] Set up API endpoints (if needed)
 - [ ] Optional: Set up a simple Express server

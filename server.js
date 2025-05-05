@@ -1,26 +1,18 @@
-const express = require("express");
-const pool = require("./db");
-require("dotenv").config();
+// server.js
+import express from 'express';
+import dotenv from 'dotenv';
+import csvRoutes from './routes/csvRoutes.js';
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("API is working!");
-});
+// Route middleware
+app.use('/api/csv', csvRoutes);
 
-// Example route to test DB
-app.get("/data", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Database error");
-  }
-});
-
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
