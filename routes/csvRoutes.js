@@ -1,12 +1,19 @@
+// routes/csvRoutes.js
 import express from 'express';
-
-const express = require('express');
-const multer = require('multer');
-const { handleCSVUpload } = require('../controllers/csvController');
+import {
+  uploadCsv,
+  listFiles,
+  getFileRecords,
+  updateFile,
+  deleteFile,
+} from '../controllers/csvController.js';
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' }); // temporary storage
 
-router.post('/upload', upload.single('file'), handleCSVUpload);
+router.post('/upload', uploadCsv);
+router.get('/files', listFiles);
+router.get('/file/:id', getFileRecords);
+router.put('/file/:id', updateFile);
+router.delete('/file/:id', deleteFile);
 
-module.exports = router;
+export default router;
