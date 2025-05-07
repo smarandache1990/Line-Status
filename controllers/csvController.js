@@ -1,6 +1,6 @@
 // controllers/csvController.js
 import pool from '../db.js';
-import parseCsv from '../utils/parseCsv.js';
+import csvParser from '../utils/csvParser.js';
 
 export const uploadCsv = async (req, res) => {
   try {
